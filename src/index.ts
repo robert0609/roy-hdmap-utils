@@ -1,5 +1,2 @@
-export function main() {
-  return 'hello world';
-}
-
-console.log(main());
+export * from './type';
+export * from './centerLine';
