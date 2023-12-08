@@ -1,0 +1,75 @@
+{
+  "name": "roy-hdmap-utils",
+  "version": "0.1.0",
+  "description": "hdmap utility",
+  "author": "yx",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.umd.js",
+  "module": "./dist/index.es.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.es.js",
+      "require": "./dist/index.umd.js"
+    }
+  },
+  "scripts": {
+    "lint": "eslint --ext .ts,.tsx,.vue src --fix",
+    "predo": "npm run lint && vue-tsc --noEmit",
+    "prepare": "husky install",
+    "dev": "vite",
+    "build": "npm run predo && vite build && npm run build:type",
+    "build:type": "tsc --emitDeclarationOnly --outDir dist",
+    "serve": "vite preview",
+    "release": "conventional-changelog -p angular -i CHANGELOG.md -s -r 0"
+  },
+  "dependencies": {
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^12.1.4",
+    "@commitlint/config-conventional": "^12.1.4",
+    "@types/node": "^15.6.1",
+    "@typescript-eslint/eslint-plugin": "^5.16.0",
+    "@typescript-eslint/parser": "^5.16.0",
+    "@vitejs/plugin-vue": "^1.2.2",
+    "@vitejs/plugin-vue-jsx": "^1.1.4",
+    "@vue/compiler-sfc": "^3.0.5",
+    "autoprefixer": "^10.2.6",
+    "commitizen": "^4.2.4",
+    "conventional-changelog-cli": "^2.1.1",
+    "cz-conventional-changelog": "^3.3.0",
+    "cz-customizable": "^6.3.0",
+    "eslint": "^7.27.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-jsx-a11y": "^6.4.1",
+    "eslint-plugin-prettier": "^3.4.0",
+    "eslint-plugin-vue": "^7.10.0",
+    "husky": "^6.0.0",
+    "lint-staged": "^11.0.0",
+    "postcss": "^8.3.0",
+    "prettier": "^2.3.0",
+    "rollup-plugin-visualizer": "^5.5.0",
+    "sass": "^1.34.0",
+    "stylelint": "^13.13.1",
+    "stylelint-config-recommended": "^5.0.0",
+    "stylelint-config-recommended-scss": "^4.2.0",
+    "stylelint-config-standard": "^22.0.0",
+    "stylelint-scss": "^3.19.0",
+    "tailwindcss": "^2.1.2",
+    "typescript": "^4.1.3",
+    "vite": "^2.3.3",
+    "vite-plugin-import": "^0.3.0",
+    "vue-tsc": "^0.0.24"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,tsx,vue}": "eslint --fix",
+    "src/**/*.{css,scss,vue}": "stylelint --fix"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-customizable"
+    }
+  }
+}
