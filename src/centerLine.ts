@@ -25,7 +25,7 @@ export function generateCenterLine(left: LineType, right: LineType): LineType {
     });
   }
   // 对中心多段线的点序列进行道格拉斯抽稀
-  const simplifiedLine = simplify(totalCenterLine, 5, true);
+  const simplifiedLine = simplify(totalCenterLine, 0.0001, true);
   // 最后抽稀后的点是最终中心线的关键点
   return simplifiedLine;
 }
