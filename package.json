@@ -29,7 +29,9 @@
     "@commitlint/cli": "^12.1.4",
     "@commitlint/config-conventional": "^12.1.4",
     "@types/gl-matrix": "^3.2.0",
+    "@types/jsts": "^0.17.22",
     "@types/node": "^15.14.9",
+    "@types/proj4": "^2.5.5",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "@vitejs/plugin-vue": "^1.10.2",
@@ -72,7 +74,10 @@
     }
   },
   "dependencies": {
+    "@turf/turf": "^6.5.0",
     "gl-matrix": "^3.4.3",
+    "jsts": "^2.11.0",
+    "proj4": "^2.9.2",
     "simplify-js": "^1.2.4"
   }
 }

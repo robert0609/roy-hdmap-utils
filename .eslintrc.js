@@ -27,6 +27,7 @@ module.exports = {
     "@typescript-eslint/no-empty-function": "warn",
     "@typescript-eslint/explicit-function-return-type": "off",
     "jsx-a11y/click-events-have-key-events": "warn",
-    "jsx-a11y/no-static-element-interactions": "warn"
+    "jsx-a11y/no-static-element-interactions": "warn",
+    "@typescript-eslint/ban-ts-comment": "off"
   }
 };

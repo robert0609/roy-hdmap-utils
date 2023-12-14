@@ -1,72 +1,195 @@
-import { LineType, PointType } from './type';
-import simplify from 'simplify-js';
+import { type IPoint, type ILine, RLine, RPoint } from './type';
+import jsts from 'jsts';
+import proj from 'proj4';
+import turf, { point, type Feature, type Point } from '@turf/turf';
 
-/**
- * 根据两条车道线，自动生成中心线
- */
-export function generateCenterLine(left: LineType, right: LineType): LineType {
-  const maxPointCount = left.length * right.length;
-  // 两条线的点序列分别线性插值至点数目相等
-  const leftAfterInterpolate = interpolatePoints(left, maxPointCount);
-  const rightAfterInterpolate = interpolatePoints(right, maxPointCount);
-  if (leftAfterInterpolate.length !== rightAfterInterpolate.length) {
-    throw new Error(
-      `Error: the point count of both line is not same after interpolation.`
+// proj.defs([
+//   [
+//     'EPSG:4326',
+//     '+proj=longlat +datum=WGS84 +no_defs +type=crs'
+//   ], [
+//     'EPSG:32748',
+//     '+proj=utm +zone=48 +south +datum=WGS84 +units=m +no_defs +type=crs'
+//   ]
+// ]);
+// const convertor = proj('epsg:4326', 'epsg:32748');
+
+export function adjustCenterLine(lines: ILine[]): ILine[] {
+  // // 先将经纬度转换成utm坐标
+  const utmLines = lines.map((line) => {
+    return new RLine(
+      line.id,
+      line.type,
+      line.points.map((point) => {
+        // const [x, y] = convertor.forward([point.x, point.y]);
+        return new RPoint(point.id, point.x, point.y);
+      })
     );
-  }
-  // 两两点计算中点，然后连成一条中心多段线
-  const totalCenterLine: LineType = [];
-  for (let i = 0; i < leftAfterInterpolate.length; ++i) {
-    const leftPoint = leftAfterInterpolate[i];
-    const rightPoint = rightAfterInterpolate[i];
-    totalCenterLine.push({
-      x: (leftPoint.x + rightPoint.x) / 2,
-      y: (leftPoint.y + rightPoint.y) / 2
+  });
+
+  // 构建strTree结构
+  // @ts-ignore
+  const strTree = new jsts.index.strtree();
+  utmLines.forEach((line) => {
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
+    line.points.forEach((point) => {
+      if (point.x < minX) minX = point.x;
+      if (point.x > maxX) maxX = point.x;
+      if (point.y < minY) minY = point.y;
+      if (point.y > maxY) maxY = point.y;
     });
-  }
-  // 对中心多段线的点序列进行道格拉斯抽稀
-  const simplifiedLine = simplify(totalCenterLine, 0.0001, true);
-  // 最后抽稀后的点是最终中心线的关键点
-  return simplifiedLine;
+
+    strTree.insert(new jsts.geom.Envelope(minX, maxX, minY, maxY), line);
+  });
+
+  const adjustedUtmLines: RLine[] = [];
+  /**
+   * 遍历每条中心线:
+   * 1. 每隔1米对中心线进行插值
+   * 2. 遍历中心线上所有点：
+   *  1. 从strTree中查询该点周边4米范围，与之相交的所有车道线
+   *  2. 遍历所有相交的车道线：
+   *    1. 查找这条线上与这个点的最近点，并求出距离
+   *    2. 判断方向：在左还是在右
+   *  3. 判断是否左右都有最近点，如果有一个方向没有，那么跳过此循环逻辑
+   *  4. 分别求出左边和右边最近的点，然后校准中心，得到校准后的坐标
+   *  5. 更新校准坐标
+   * 3. 拿到校准后的中心线的点列表，更新线对象
+   */
+  utmLines
+    .filter((line) => line.type === 'center_line')
+    .forEach((line) => {
+      // 每隔1米对中心线进行插值
+      const totalLength = turf.length(line.geoJson);
+      const interval = 0.001;
+      let length = interval;
+      const interpolatedPoints: RPoint[] = [line.points[0]];
+      while (length < totalLength) {
+        const [x, y] = turf.along(line.geoJson, length).geometry.coordinates;
+        interpolatedPoints.push(new RPoint('', x, y));
+
+        length += interval;
+      }
+      interpolatedPoints.push(line.points[line.points.length - 1]);
+
+      // 校准后的中心线的点列表
+      const adjustedPoints: RPoint[] = [];
+
+      // 遍历中心线上所有点
+      interpolatedPoints.forEach((originalCenterPoint) => {
+        // 从strTree中查询该点周边4米范围，与之相交的所有车道线
+        // @ts-ignore
+        const intersectedLines: RLine[] = strTree.query(
+          new jsts.geom.Envelope(
+            originalCenterPoint.x - 0.004,
+            originalCenterPoint.x + 0.004,
+            originalCenterPoint.y - 0.004,
+            originalCenterPoint.y + 0.004
+          )
+        );
+
+        let leftMinDis: number | undefined;
+        let leftClosestPoint: Feature<Point> | undefined;
+        let rightMinDis: number | undefined;
+        let rightClosestPoint: Feature<Point> | undefined;
+
+        // 遍历所有相交的车道线
+        intersectedLines.forEach((line) => {
+          // 查找这条线上与这个点的最近点，并求出距离
+          const closestPoint = turf.nearestPointOnLine(
+            line.geoJson,
+            originalCenterPoint.geoJson
+          );
+          const d = turf.distance(originalCenterPoint.geoJson, closestPoint);
+
+          // 判断方向：在左还是在右
+          const orient = judgeOrientaition(
+            interpolatedPoints[0],
+            originalCenterPoint,
+            {
+              x: closestPoint.geometry.coordinates[0],
+              y: closestPoint.geometry.coordinates[1]
+            }
+          );
+
+          if (orient > 0) {
+            if (leftMinDis === undefined || d < leftMinDis) {
+              leftMinDis = d;
+              leftClosestPoint = closestPoint;
+            }
+          } else if (orient < 0) {
+            if (rightMinDis === undefined || d < rightMinDis) {
+              rightMinDis = d;
+              rightClosestPoint = closestPoint;
+            }
+          }
+        });
+
+        // 判断是否左右都有最近点，如果有一个方向没有，那么跳过此循环逻辑
+        if (leftClosestPoint === undefined || rightClosestPoint === undefined) {
+          return;
+        }
+
+        // 分别求出左边和右边最近的点，然后校准中心，得到校准后的坐标
+        const middlePoint = turf.midpoint(leftClosestPoint, rightClosestPoint);
+
+        // 更新校准坐标
+        adjustedPoints.push(
+          new RPoint(
+            originalCenterPoint.id,
+            middlePoint.geometry.coordinates[0],
+            middlePoint.geometry.coordinates[1]
+          )
+        );
+      });
+
+      // 对校准后的线进行抽稀
+      const rline = new RLine(line.id, line.type, adjustedPoints);
+      const simplifiedLine = turf.simplify(rline.geoJson, {
+        tolerance: 0.1,
+        highQuality: true
+      });
+
+      // 拿到校准后的中心线的点列表，更新线对象
+      adjustedUtmLines.push(
+        new RLine(
+          line.id,
+          line.type,
+          simplifiedLine.geometry.coordinates.map(
+            (position) => new RPoint('', position[0], position[1])
+          )
+        )
+      );
+    });
+
+  // // 再将utm坐标转回经纬度
+  return adjustedUtmLines.map((line) => {
+    return {
+      id: line.id,
+      type: line.type,
+      points: line.points.map((point) => {
+        // const [x, y] = convertor.inverse([point.x, point.y]);
+        return { id: point.id, x: point.x, y: point.y };
+      })
+    };
+  });
 }
 
-function interpolatePoints(line: LineType, maxPointCount: number) {
-  // 插值后的点序列
-  const pointsAfterInterpolate: PointType[] = [];
+function judgeOrientaition(
+  pointA: RPoint,
+  pointB: RPoint,
+  pointC: { x: number; y: number }
+) {
+  // Calculate vectors AB and AC
+  const vector_AB = [pointB.x - pointA.x, pointB.y - pointA.y];
+  const vector_AC = [pointC.x - pointA.x, pointC.y - pointA.y];
 
-  // 这条线的总距离
-  const totalDistanceX = line[line.length - 1].x - line[0].x;
-  // 要插值的点的剩余总数
-  let toInterpolatePointsRestTotalCount = maxPointCount - line.length;
-  // 计算两两点之间的距离，通过计算每个两两点之间的距离与总距离的比值来划分每段线需要的插值
-  let startPoint = line[0];
-  pointsAfterInterpolate.push(startPoint);
-  for (let i = 1; i < line.length; ++i) {
-    const endPoint = line[i];
-    const distanceX = endPoint.x - startPoint.x;
-    const distanceY = endPoint.y - startPoint.y;
-    // 计算当前两个点之间应该插入的点数；如果是最后一段距离的话，则把剩余的点数全部算进去
-    const toInterpolatePointsCount =
-      i === line.length - 1
-        ? toInterpolatePointsRestTotalCount
-        : Math.round(
-            (distanceX / totalDistanceX) * toInterpolatePointsRestTotalCount
-          );
-    // 线性插值
-    const stepX = distanceX / (toInterpolatePointsCount + 1);
-    const stepY = distanceY / (toInterpolatePointsCount + 1);
-    for (let j = 0; j < toInterpolatePointsCount; ++j) {
-      pointsAfterInterpolate.push({
-        x: startPoint.x + stepX * (j + 1),
-        y: startPoint.y + stepY * (j + 1)
-      });
-    }
+  // Calculate the cross product
+  const crossProduct =
+    vector_AB[0] * vector_AC[1] - vector_AB[1] * vector_AC[0];
 
-    pointsAfterInterpolate.push(endPoint);
-
-    startPoint = endPoint;
-    toInterpolatePointsRestTotalCount -= toInterpolatePointsCount;
-  }
-
-  return pointsAfterInterpolate;
+  return crossProduct;
 }
