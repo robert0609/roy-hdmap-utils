@@ -5,7 +5,7 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import path from 'path';
 import pkg from './package.json';
 var dependencies = pkg.dependencies;
-var externalDependencies = dependencies ? Object.keys(dependencies) : [];
+var externalDependencies = dependencies ? Object.keys(dependencies).filter(name => name !== 'jsts') : [];
 
 // https://vitejs.dev/config/
 export default defineConfig({
