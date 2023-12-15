@@ -1,5 +1,5 @@
 import type { Point, LineString, Feature } from '@turf/turf';
-import turf from '@turf/turf';
+import { point, lineString } from '@turf/helpers';
 
 export type LineType =
   | 'center_line'
@@ -31,7 +31,7 @@ export class RPoint {
     public readonly x: number,
     public readonly y: number
   ) {
-    this.geoJson = turf.point([x, y]);
+    this.geoJson = point([x, y]);
   }
 }
 
@@ -43,6 +43,6 @@ export class RLine {
     public readonly type: LineType,
     public readonly points: RPoint[] = []
   ) {
-    this.geoJson = turf.lineString(points.map((point) => [point.x, point.y]));
+    this.geoJson = lineString(points.map((point) => [point.x, point.y]));
   }
 }

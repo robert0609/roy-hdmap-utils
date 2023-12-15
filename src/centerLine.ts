@@ -1,7 +1,14 @@
 import { type IPoint, type ILine, RLine, RPoint } from './type';
-import jsts from 'jsts';
+// @ts-ignore
+import jsts from 'jsts/dist/jsts.min.js';
 import proj from 'proj4';
-import turf, { point, type Feature, type Point } from '@turf/turf';
+import { type Feature, type Point } from '@turf/turf';
+import tLength from '@turf/length';
+import along from '@turf/along';
+import nearestPointOnLine from '@turf/nearest-point-on-line';
+import distance from '@turf/distance';
+import midpoint from '@turf/midpoint';
+import simplify from '@turf/simplify';
 
 // proj.defs([
 //   [
@@ -29,7 +36,7 @@ export function adjustCenterLine(lines: ILine[]): ILine[] {
 
   // 构建strTree结构
   // @ts-ignore
-  const strTree = new jsts.index.strtree();
+  const strTree = new jsts.index.strtree.STRtree();
   utmLines.forEach((line) => {
     let minX = Infinity,
       maxX = -Infinity,
@@ -63,12 +70,12 @@ export function adjustCenterLine(lines: ILine[]): ILine[] {
     .filter((line) => line.type === 'center_line')
     .forEach((line) => {
       // 每隔1米对中心线进行插值
-      const totalLength = turf.length(line.geoJson);
+      const totalLength = tLength(line.geoJson);
       const interval = 0.001;
       let length = interval;
       const interpolatedPoints: RPoint[] = [line.points[0]];
       while (length < totalLength) {
-        const [x, y] = turf.along(line.geoJson, length).geometry.coordinates;
+        const [x, y] = along(line.geoJson, length).geometry.coordinates;
         interpolatedPoints.push(new RPoint('', x, y));
 
         length += interval;
@@ -81,13 +88,14 @@ export function adjustCenterLine(lines: ILine[]): ILine[] {
       // 遍历中心线上所有点
       interpolatedPoints.forEach((originalCenterPoint) => {
         // 从strTree中查询该点周边4米范围，与之相交的所有车道线
+        const bufferDistance = 0.00001;
         // @ts-ignore
-        const intersectedLines: RLine[] = strTree.query(
+        const intersectedLines: { array: RLine[] } = strTree.query(
           new jsts.geom.Envelope(
-            originalCenterPoint.x - 0.004,
-            originalCenterPoint.x + 0.004,
-            originalCenterPoint.y - 0.004,
-            originalCenterPoint.y + 0.004
+            originalCenterPoint.x - bufferDistance,
+            originalCenterPoint.x + bufferDistance,
+            originalCenterPoint.y - bufferDistance,
+            originalCenterPoint.y + bufferDistance
           )
         );
 
@@ -97,36 +105,38 @@ export function adjustCenterLine(lines: ILine[]): ILine[] {
         let rightClosestPoint: Feature<Point> | undefined;
 
         // 遍历所有相交的车道线
-        intersectedLines.forEach((line) => {
-          // 查找这条线上与这个点的最近点，并求出距离
-          const closestPoint = turf.nearestPointOnLine(
-            line.geoJson,
-            originalCenterPoint.geoJson
-          );
-          const d = turf.distance(originalCenterPoint.geoJson, closestPoint);
+        intersectedLines.array
+          .filter((line) => line.type !== 'center_line')
+          .forEach((line) => {
+            // 查找这条线上与这个点的最近点，并求出距离
+            const closestPoint = nearestPointOnLine(
+              line.geoJson,
+              originalCenterPoint.geoJson
+            );
+            const d = distance(originalCenterPoint.geoJson, closestPoint);
 
-          // 判断方向：在左还是在右
-          const orient = judgeOrientaition(
-            interpolatedPoints[0],
-            originalCenterPoint,
-            {
-              x: closestPoint.geometry.coordinates[0],
-              y: closestPoint.geometry.coordinates[1]
-            }
-          );
+            // 判断方向：在左还是在右
+            const orient = judgeOrientaition(
+              interpolatedPoints[0],
+              originalCenterPoint,
+              {
+                x: closestPoint.geometry.coordinates[0],
+                y: closestPoint.geometry.coordinates[1]
+              }
+            );
 
-          if (orient > 0) {
-            if (leftMinDis === undefined || d < leftMinDis) {
-              leftMinDis = d;
-              leftClosestPoint = closestPoint;
+            if (orient > 0) {
+              if (leftMinDis === undefined || d < leftMinDis) {
+                leftMinDis = d;
+                leftClosestPoint = closestPoint;
+              }
+            } else if (orient < 0) {
+              if (rightMinDis === undefined || d < rightMinDis) {
+                rightMinDis = d;
+                rightClosestPoint = closestPoint;
+              }
             }
-          } else if (orient < 0) {
-            if (rightMinDis === undefined || d < rightMinDis) {
-              rightMinDis = d;
-              rightClosestPoint = closestPoint;
-            }
-          }
-        });
+          });
 
         // 判断是否左右都有最近点，如果有一个方向没有，那么跳过此循环逻辑
         if (leftClosestPoint === undefined || rightClosestPoint === undefined) {
@@ -134,7 +144,7 @@ export function adjustCenterLine(lines: ILine[]): ILine[] {
         }
 
         // 分别求出左边和右边最近的点，然后校准中心，得到校准后的坐标
-        const middlePoint = turf.midpoint(leftClosestPoint, rightClosestPoint);
+        const middlePoint = midpoint(leftClosestPoint, rightClosestPoint);
 
         // 更新校准坐标
         adjustedPoints.push(
@@ -146,10 +156,13 @@ export function adjustCenterLine(lines: ILine[]): ILine[] {
         );
       });
 
+      if (adjustedPoints.length < 2) {
+        return;
+      }
       // 对校准后的线进行抽稀
       const rline = new RLine(line.id, line.type, adjustedPoints);
-      const simplifiedLine = turf.simplify(rline.geoJson, {
-        tolerance: 0.1,
+      const simplifiedLine = simplify(rline.geoJson, {
+        tolerance: 0.0001,
         highQuality: true
       });
 

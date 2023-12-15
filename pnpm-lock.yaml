@@ -5,6 +5,27 @@ settings:
   excludeLinksFromLockfile: false
 
 dependencies:
+  '@turf/along':
+    specifier: ^6.5.0
+    version: 6.5.0
+  '@turf/distance':
+    specifier: ^6.5.0
+    version: 6.5.0
+  '@turf/helpers':
+    specifier: ^6.5.0
+    version: 6.5.0
+  '@turf/length':
+    specifier: ^6.5.0
+    version: 6.5.0
+  '@turf/midpoint':
+    specifier: ^6.5.0
+    version: 6.5.0
+  '@turf/nearest-point-on-line':
+    specifier: ^6.5.0
+    version: 6.5.0
+  '@turf/simplify':
+    specifier: ^6.5.0
+    version: 6.5.0
   '@turf/turf':
     specifier: ^6.5.0
     version: 6.5.0

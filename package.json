@@ -74,6 +74,13 @@
     }
   },
   "dependencies": {
+    "@turf/along": "^6.5.0",
+    "@turf/distance": "^6.5.0",
+    "@turf/helpers": "^6.5.0",
+    "@turf/length": "^6.5.0",
+    "@turf/midpoint": "^6.5.0",
+    "@turf/nearest-point-on-line": "^6.5.0",
+    "@turf/simplify": "^6.5.0",
     "@turf/turf": "^6.5.0",
     "gl-matrix": "^3.4.3",
     "jsts": "^2.11.0",
