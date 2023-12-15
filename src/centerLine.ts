@@ -162,7 +162,7 @@ export function adjustCenterLine(lines: ILine[]): ILine[] {
       // 对校准后的线进行抽稀
       const rline = new RLine(line.id, line.type, adjustedPoints);
       const simplifiedLine = simplify(rline.geoJson, {
-        tolerance: 0.0001,
+        tolerance: 0.000001,
         highQuality: true
       });
 
