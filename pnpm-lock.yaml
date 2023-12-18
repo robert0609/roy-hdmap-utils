@@ -8,6 +8,12 @@ dependencies:
   '@turf/along':
     specifier: ^6.5.0
     version: 6.5.0
+  '@turf/bearing':
+    specifier: ^6.5.0
+    version: 6.5.0
+  '@turf/destination':
+    specifier: ^6.5.0
+    version: 6.5.0
   '@turf/distance':
     specifier: ^6.5.0
     version: 6.5.0
