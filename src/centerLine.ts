@@ -72,12 +72,15 @@ export function adjustCenterLine(lines: ILine[]): ILine[] {
       // 每隔1米对中心线进行插值
       const totalLength = tLength(line.geoJson);
       const interval = 0.001;
-      let length = interval;
+      let length = 0.00001;
       const interpolatedPoints: RPoint[] = [line.points[0]];
+      const [x, y] = along(line.geoJson, length).geometry.coordinates;
+      interpolatedPoints.push(new RPoint('', x, y));
+      length += interval;
+
       while (length < totalLength) {
         const [x, y] = along(line.geoJson, length).geometry.coordinates;
         interpolatedPoints.push(new RPoint('', x, y));
-
         length += interval;
       }
       interpolatedPoints.push(line.points[line.points.length - 1]);
@@ -168,13 +171,13 @@ export function adjustCenterLine(lines: ILine[]): ILine[] {
 
       // 拿到校准后的中心线的点列表，更新线对象
       adjustedUtmLines.push(
-        new RLine(
-          line.id,
-          line.type,
-          simplifiedLine.geometry.coordinates.map(
+        new RLine(line.id, line.type, [
+          rline.points[0],
+          ...simplifiedLine.geometry.coordinates.map(
             (position) => new RPoint('', position[0], position[1])
-          )
-        )
+          ),
+          rline.points[rline.points.length - 1]
+        ])
       );
     });
 

@@ -16,18 +16,25 @@ import destination from '@turf/destination';
 import simplify from '@turf/simplify';
 
 export function attachLine(line: ILine, targetLine: ILine) {
-  const [utmLine, utmTargetLine] = [line, targetLine].map((line) => {
-    return new RLine(
-      line.id,
-      line.type,
-      line.points.map((point) => {
-        return new RPoint(point.id, point.x, point.y);
-      })
-    );
-  });
-  if (utmLine.points.length < 2) {
+  if (line.points.length < 2) {
     return;
   }
+  // 取中心线两个端点，连成一条直线，在这条线上进行插值校准
+  const utmLine = new RLine(line.id, line.type, [
+    new RPoint(line.points[0].id, line.points[0].x, line.points[0].y),
+    new RPoint(
+      line.points[line.points.length - 1].id,
+      line.points[line.points.length - 1].x,
+      line.points[line.points.length - 1].y
+    )
+  ]);
+  const utmTargetLine = new RLine(
+    targetLine.id,
+    targetLine.type,
+    targetLine.points.map((point) => {
+      return new RPoint(point.id, point.x, point.y);
+    })
+  );
 
   // 先取线的两个端点与边缘线的最近点
   const startVertex = utmLine.points[0];
