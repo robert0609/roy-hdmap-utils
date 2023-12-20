@@ -9,7 +9,8 @@ export type LineType =
   | 'solid_yellow'
   | 'stop_line'
   | 'topo_line'
-  | 'virtual_topo';
+  | 'virtual_topo'
+  | 'debug_line';
 
 export interface IPoint {
   id: string;

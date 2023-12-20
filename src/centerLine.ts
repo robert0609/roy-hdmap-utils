@@ -21,7 +21,13 @@ import simplify from '@turf/simplify';
 // ]);
 // const convertor = proj('epsg:4326', 'epsg:32748');
 
-export function adjustCenterLine(lines: ILine[]): ILine[] {
+export function adjustCenterLine(
+  lines: ILine[],
+  { debug = false }: { debug?: boolean } = {}
+): {
+  adjustedLines: ILine[];
+  debugLines: ILine[];
+} {
   // // 先将经纬度转换成utm坐标
   const utmLines = lines.map((line) => {
     return new RLine(
@@ -52,6 +58,9 @@ export function adjustCenterLine(lines: ILine[]): ILine[] {
     strTree.insert(new jsts.geom.Envelope(minX, maxX, minY, maxY), line);
   });
 
+  // 调试线
+  const debugLines: RLine[] = [];
+
   const adjustedUtmLines: RLine[] = [];
   /**
    * 遍历每条中心线:
@@ -74,6 +83,7 @@ export function adjustCenterLine(lines: ILine[]): ILine[] {
       const interval = 0.001;
       let length = 0.00001;
       const interpolatedPoints: RPoint[] = [line.points[0]];
+
       const [x, y] = along(line.geoJson, length).geometry.coordinates;
       interpolatedPoints.push(new RPoint('', x, y));
       length += interval;
@@ -83,6 +93,11 @@ export function adjustCenterLine(lines: ILine[]): ILine[] {
         interpolatedPoints.push(new RPoint('', x, y));
         length += interval;
       }
+
+      length = length - interval + 0.00001;
+      const [x1, y1] = along(line.geoJson, length).geometry.coordinates;
+      interpolatedPoints.push(new RPoint('', x1, y1));
+
       interpolatedPoints.push(line.points[line.points.length - 1]);
 
       // 校准后的中心线的点列表
@@ -91,7 +106,7 @@ export function adjustCenterLine(lines: ILine[]): ILine[] {
       // 遍历中心线上所有点
       interpolatedPoints.forEach((originalCenterPoint) => {
         // 从strTree中查询该点周边4米范围，与之相交的所有车道线
-        const bufferDistance = 0.00001;
+        const bufferDistance = 0.004;
         // @ts-ignore
         const intersectedLines: { array: RLine[] } = strTree.query(
           new jsts.geom.Envelope(
@@ -149,6 +164,35 @@ export function adjustCenterLine(lines: ILine[]): ILine[] {
         // 分别求出左边和右边最近的点，然后校准中心，得到校准后的坐标
         const middlePoint = midpoint(leftClosestPoint, rightClosestPoint);
 
+        // 增加调试线
+        if (debug) {
+          debugLines.push(
+            new RLine('', 'debug_line', [
+              new RPoint(
+                '',
+                middlePoint.geometry.coordinates[0],
+                middlePoint.geometry.coordinates[1]
+              ),
+              new RPoint(
+                '',
+                leftClosestPoint.geometry.coordinates[0],
+                leftClosestPoint.geometry.coordinates[1]
+              )
+            ]),
+            new RLine('', 'debug_line', [
+              new RPoint(
+                '',
+                middlePoint.geometry.coordinates[0],
+                middlePoint.geometry.coordinates[1]
+              ),
+              new RPoint(
+                '',
+                rightClosestPoint.geometry.coordinates[0],
+                rightClosestPoint.geometry.coordinates[1]
+              )
+            ])
+          );
+        }
         // 更新校准坐标
         adjustedPoints.push(
           new RPoint(
@@ -164,34 +208,51 @@ export function adjustCenterLine(lines: ILine[]): ILine[] {
       }
       // 对校准后的线进行抽稀
       const rline = new RLine(line.id, line.type, adjustedPoints);
-      const simplifiedLine = simplify(rline.geoJson, {
-        tolerance: 0.000001,
-        highQuality: true
-      });
+      if (debug) {
+        // 拿到校准后的中心线的点列表，更新线对象
+        adjustedUtmLines.push(rline);
+      } else {
+        const simplifiedLine = simplify(rline.geoJson, {
+          tolerance: 0.000001,
+          highQuality: true
+        });
 
-      // 拿到校准后的中心线的点列表，更新线对象
-      adjustedUtmLines.push(
-        new RLine(line.id, line.type, [
-          rline.points[0],
-          ...simplifiedLine.geometry.coordinates.map(
-            (position) => new RPoint('', position[0], position[1])
-          ),
-          rline.points[rline.points.length - 1]
-        ])
-      );
+        // 拿到校准后的中心线的点列表，更新线对象
+        adjustedUtmLines.push(
+          new RLine(line.id, line.type, [
+            rline.points[0],
+            ...simplifiedLine.geometry.coordinates.map(
+              (position) => new RPoint('', position[0], position[1])
+            ),
+            rline.points[rline.points.length - 1]
+          ])
+        );
+      }
     });
 
   // // 再将utm坐标转回经纬度
-  return adjustedUtmLines.map((line) => {
-    return {
-      id: line.id,
-      type: line.type,
-      points: line.points.map((point) => {
-        // const [x, y] = convertor.inverse([point.x, point.y]);
-        return { id: point.id, x: point.x, y: point.y };
-      })
-    };
-  });
+  return {
+    adjustedLines: adjustedUtmLines.map((line) => {
+      return {
+        id: line.id,
+        type: line.type,
+        points: line.points.map((point) => {
+          // const [x, y] = convertor.inverse([point.x, point.y]);
+          return { id: point.id, x: point.x, y: point.y };
+        })
+      };
+    }),
+    debugLines: debugLines.map((line) => {
+      return {
+        id: line.id,
+        type: line.type,
+        points: line.points.map((point) => {
+          // const [x, y] = convertor.inverse([point.x, point.y]);
+          return { id: point.id, x: point.x, y: point.y };
+        })
+      };
+    })
+  };
 }
 
 function judgeOrientaition(
